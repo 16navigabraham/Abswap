@@ -40,7 +40,19 @@ export default function SwapPage() {
 
   const getUserWalletAddress = () => {
     if (!user) return null
-    return user.wallet?.address || user.linkedAccounts?.find((account) => account.type === "wallet")?.address
+    
+    // Check if user has a wallet property with address
+    if (user.wallet?.address) {
+      return user.wallet.address
+    }
+    
+    // Check linked accounts for wallet type
+    const walletAccount = user.linkedAccounts?.find((account: any) => account.type === "wallet")
+    if (walletAccount && 'address' in walletAccount) {
+      return walletAccount.address
+    }
+    
+    return null
   }
 
   const userWalletAddress = getUserWalletAddress()
@@ -64,7 +76,7 @@ export default function SwapPage() {
             </Button>
           </div>
 
-          {!authenticated && (
+          {/* {!authenticated && (
             <div className="mt-4">
               <Button
                 onClick={login}
@@ -73,7 +85,7 @@ export default function SwapPage() {
                 Connect Wallet
               </Button>
             </div>
-          )}
+          )} */}
 
           {authenticated && userWalletAddress && (
             <div className="mt-4 flex items-center justify-between p-3 bg-gray-50 rounded-xl">
