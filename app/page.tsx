@@ -102,7 +102,7 @@ export default function SwapPage() {
           <div className="p-4 bg-gray-50 rounded-2xl">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-500">From</span>
-              <span className="text-sm text-gray-500">Balance: 0</span>
+              <span className="text-sm text-gray-500">Your Balance: 0</span>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex-1">
