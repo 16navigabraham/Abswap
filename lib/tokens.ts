@@ -116,7 +116,7 @@ export const SEPOLIA_TOKENS: Token[] = [
   {
     symbol: "WETH",
     name: "Wrapped Ethereum",
-    address: "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+    address: "0x4200000000000000000000000000000000000006", // Base Sepolia WETH
     decimals: 18,
     logoURI: "/placeholder.svg?height=32&width=32",
     isPopular: true,
@@ -124,33 +124,12 @@ export const SEPOLIA_TOKENS: Token[] = [
   {
     symbol: "USDC",
     name: "USD Coin",
-    address: "0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8",
+    address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // Base Sepolia USDC
     decimals: 6,
-    logoURI: "/placeholder.svg?height=32&width=32",
-    isPopular: true,
-  },
-  {
-    symbol: "USDT",
-    name: "Tether USD",
-    address: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0",
-    decimals: 6,
-    logoURI: "/placeholder.svg?height=32&width=32",
-    isPopular: true,
-  },
-  {
-    symbol: "DAI",
-    name: "Dai Stablecoin",
-    address: "0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357",
-    decimals: 18,
-    logoURI: "/placeholder.svg?height=32&width=32",
-    isPopular: true,
-  },
-  {
-    symbol: "WBTC",
-    name: "Wrapped Bitcoin",
-    address: "0x29f2D40B0605204364af54EC677bD022dA425d03",
-    decimals: 8,
     logoURI: "/placeholder.svg?height=32&width=32",
     isPopular: true,
   },
 ]
+
+// Alias for Base Sepolia tokens
+export const BASE_SEPOLIA_TOKENS = SEPOLIA_TOKENS

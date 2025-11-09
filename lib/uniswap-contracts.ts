@@ -1,34 +1,31 @@
 /**
- * Uniswap Contract Addresses for Sepolia Testnet
- * Chain ID: 11155111
+ * Uniswap Contract Addresses for Base Sepolia Testnet
+ * Chain ID: 84532
  */
 
 export const UNISWAP_CONTRACTS = {
-  // Uniswap V2 Contracts on Sepolia
+  // Uniswap V2 Contracts on Base Sepolia (if available)
   V2: {
-    FACTORY: '0x7E0987E5b3a30e3f2828572Bb659A548460a3003' as const,
-    ROUTER: '0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008' as const,
-    WETH: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14' as const,
+    FACTORY: '0x0000000000000000000000000000000000000000' as const, // Not deployed on Base Sepolia
+    ROUTER: '0x0000000000000000000000000000000000000000' as const, // Not deployed on Base Sepolia
+    WETH: '0x4200000000000000000000000000000000000006' as const, // Base Sepolia WETH
   },
 
-  // Uniswap V3 Contracts on Sepolia
+  // Uniswap V3 Contracts on Base Sepolia
   V3: {
-    FACTORY: '0x0227628f3F023bb0B980b67D528571c95c6DaC1c' as const,
-    ROUTER: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E' as const,
-    SWAP_ROUTER_02: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E' as const,
-    QUOTER: '0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3' as const,
-    QUOTER_V2: '0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3' as const,
-    NFT_POSITION_MANAGER: '0x1238536071E1c677A632429e3655c799b22cDA52' as const,
-    WETH: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14' as const,
+    FACTORY: '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24' as const,
+    SWAP_ROUTER: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4' as const,
+    SWAP_ROUTER_02: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4' as const,
+    QUOTER: '0xC5290058841028F1614F3A6F0F5816cAd0df5E27' as const,
+    QUOTER_V2: '0xC5290058841028F1614F3A6F0F5816cAd0df5E27' as const,
+    NFT_POSITION_MANAGER: '0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2' as const,
+    WETH: '0x4200000000000000000000000000000000000006' as const,
   },
 
-  // Token Addresses on Sepolia
+  // Token Addresses on Base Sepolia
   TOKENS: {
-    WETH: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14' as const,
-    USDC: '0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8' as const, // USDC on Sepolia
-    DAI: '0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357' as const, // DAI on Sepolia
-    USDT: '0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0' as const, // USDT on Sepolia
-    WBTC: '0x29f2D40B0605204364af54EC677bD022dA425d03' as const, // WBTC on Sepolia
+    WETH: '0x4200000000000000000000000000000000000006' as const,
+    USDC: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as const, // Base Sepolia USDC
   },
 
   // Multicall Contract
@@ -232,13 +229,13 @@ export const V3_FEE_TIERS = {
 } as const
 
 // Chain Information
-export const SEPOLIA_CHAIN_INFO = {
-  chainId: 11155111,
-  name: 'Sepolia',
-  rpcUrl: 'https://sepolia.infura.io/v3/',
-  blockExplorer: 'https://sepolia.etherscan.io',
+export const BASE_SEPOLIA_CHAIN_INFO = {
+  chainId: 84532,
+  name: 'Base Sepolia',
+  rpcUrl: 'https://sepolia.base.org',
+  blockExplorer: 'https://sepolia.basescan.org',
   nativeCurrency: {
-    name: 'Sepolia ETH',
+    name: 'Ethereum',
     symbol: 'ETH',
     decimals: 18,
   },
@@ -260,22 +257,22 @@ export const getUniswapV3Router = () => UNISWAP_CONTRACTS.V3.SWAP_ROUTER_02
 export const getWETHAddress = () => UNISWAP_CONTRACTS.TOKENS.WETH
 
 /**
- * Build a transaction URL for Sepolia Etherscan
+ * Build a transaction URL for Base Sepolia Basescan
  */
 export const buildTxUrl = (txHash: string) => {
-  return `${SEPOLIA_CHAIN_INFO.blockExplorer}/tx/${txHash}`
+  return `${BASE_SEPOLIA_CHAIN_INFO.blockExplorer}/tx/${txHash}`
 }
 
 /**
- * Build an address URL for Sepolia Etherscan
+ * Build an address URL for Base Sepolia Basescan
  */
 export const buildAddressUrl = (address: string) => {
-  return `${SEPOLIA_CHAIN_INFO.blockExplorer}/address/${address}`
+  return `${BASE_SEPOLIA_CHAIN_INFO.blockExplorer}/address/${address}`
 }
 
 /**
- * Build a token URL for Sepolia Etherscan
+ * Build a token URL for Base Sepolia Basescan
  */
 export const buildTokenUrl = (tokenAddress: string) => {
-  return `${SEPOLIA_CHAIN_INFO.blockExplorer}/token/${tokenAddress}`
+  return `${BASE_SEPOLIA_CHAIN_INFO.blockExplorer}/token/${tokenAddress}`
 }
