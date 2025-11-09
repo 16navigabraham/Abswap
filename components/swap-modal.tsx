@@ -53,40 +53,62 @@ export function SwapModal() {
               </div>
               Swap
             </CardTitle>
-            <Button variant="ghost" size="icon" className="text-gray-600 hover:text-gray-900">
-              <Settings className="w-5 h-5" />
-            </Button>
-          </div>
-
-          {/* Wallet Connection */}
-          <div className="mt-4">
-            {!isConnected ? (
-              <Button
-                onClick={() => open()}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium"
-              >
-                <Wallet className="w-4 h-4 mr-2" />
-                Connect Wallet
-              </Button>
-            ) : (
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium text-green-800">Connected</span>
-                  <span className="text-xs text-green-600">
-                    {address ? formatAddress(address) : "No wallet connected"}
-                  </span>
-                </div>
+            <div className="flex items-center gap-2">
+              {/* Wallet Connection - Opens Reown AppKit Modal */}
+              {isConnected && address ? (
                 <Button
-                  onClick={() => disconnect()}
+                  onClick={() => open()}
                   variant="outline"
                   size="sm"
-                  className="text-green-700 border-green-300 hover:bg-green-100 bg-transparent"
+                  className="border-green-300 hover:bg-green-50"
+                >
+                  <Wallet className="w-3 h-3 mr-1" />
+                  <span className="text-xs font-medium">{formatAddress(address)}</span>
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => open()}
+                  variant="outline"
+                  size="sm"
+                  className="border-green-300 text-green-600 hover:bg-green-50"
+                >
+                  <Wallet className="w-3 h-3 mr-1" />
+                  Connect
+                </Button>
+              )}
+              
+              <Button variant="ghost" size="icon" className="text-gray-600 hover:text-gray-900">
+                <Settings className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Wallet & Network Info */}
+          {isConnected && address && (
+            <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-green-800">Wallet Address</span>
+                  <span className="text-sm font-semibold text-gray-900">{formatAddress(address)}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs font-medium text-green-600">Connected</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-green-200/50">
+                <span className="text-xs text-green-700">Network: <span className="font-medium">Base Sepolia</span></span>
+                <Button
+                  onClick={() => disconnect()}
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-green-700 hover:bg-green-100 h-6 px-2"
                 >
                   Disconnect
                 </Button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </CardHeader>
 
         <CardContent className="space-y-4">
