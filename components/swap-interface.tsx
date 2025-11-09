@@ -118,6 +118,13 @@ export function SwapInterface() {
       network: "Sepolia Testnet",
     })
 
+    console.log("📝 Uniswap Contract Info:", {
+      version: "V2",
+      router: "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008",
+      factory: "0x7E0987E5b3a30e3f2828572Bb659A548460a3003",
+      weth: "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+    })
+
     // Simulate transaction processing
     await new Promise((resolve) => setTimeout(resolve, 3000))
 

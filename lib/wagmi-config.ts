@@ -2,6 +2,7 @@ import { cookieStorage, createStorage } from "wagmi"
 import { sepolia, mainnet } from "wagmi/chains"
 import { createAppKit } from "@reown/appkit/react"
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi"
+import type { AppKitNetwork } from "@reown/appkit/networks"
 
 // Get projectId from https://cloud.reown.com
 export const projectId = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID || ""
@@ -11,7 +12,7 @@ if (!projectId) {
 }
 
 // Create wagmiAdapter
-export const networks = [sepolia, mainnet]
+export const networks = [sepolia, mainnet] as [AppKitNetwork, ...AppKitNetwork[]]
 
 export const wagmiAdapter = new WagmiAdapter({
   storage: createStorage({
