@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { ArrowUpDown, Settings, Wallet } from "lucide-react"
-import { usePrivy } from "@privy-io/react-auth"
+import { useAppKit } from "@reown/appkit/react"
+import { useAccount, useDisconnect } from "wagmi"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,7 +11,9 @@ import { TokenSelector } from "./token-selector"
 import { SEPOLIA_TOKENS, type Token } from "@/lib/tokens"
 
 export function SwapModal() {
-  const { ready, authenticated, user, login, logout } = usePrivy()
+  const { open } = useAppKit()
+  const { address, isConnected } = useAccount()
+  const { disconnect } = useDisconnect()
 
   const [fromToken, setFromToken] = useState<Token>(SEPOLIA_TOKENS[0])
   const [toToken, setToToken] = useState<Token>(SEPOLIA_TOKENS[1])
@@ -39,21 +42,6 @@ export function SwapModal() {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`
   }
 
-  const getUserWalletAddress = () => {
-    if (!user) return null
-    return user.wallet?.address || user.linkedAccounts?.find((account) => account.type === "wallet")?.address
-  }
-
-  const userWalletAddress = getUserWalletAddress()
-
-  if (!ready) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-emerald-600 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-emerald-600 flex items-center justify-center p-4">
       <Card className="w-full max-w-md bg-white/95 backdrop-blur-sm shadow-2xl border-0">
@@ -72,9 +60,9 @@ export function SwapModal() {
 
           {/* Wallet Connection */}
           <div className="mt-4">
-            {!authenticated ? (
+            {!isConnected ? (
               <Button
-                onClick={login}
+                onClick={() => open()}
                 className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium"
               >
                 <Wallet className="w-4 h-4 mr-2" />
@@ -85,12 +73,11 @@ export function SwapModal() {
                 <div className="flex flex-col">
                   <span className="text-sm font-medium text-green-800">Connected</span>
                   <span className="text-xs text-green-600">
-                    {userWalletAddress ? formatAddress(userWalletAddress) : "No wallet linked"}
+                    {address ? formatAddress(address) : "No wallet connected"}
                   </span>
-                  {user?.email?.address && <span className="text-xs text-green-500">{user.email.address}</span>}
                 </div>
                 <Button
-                  onClick={logout}
+                  onClick={() => disconnect()}
                   variant="outline"
                   size="sm"
                   className="text-green-700 border-green-300 hover:bg-green-100 bg-transparent"
@@ -107,7 +94,7 @@ export function SwapModal() {
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm text-gray-600">
               <span>From</span>
-              <span>Balance: {authenticated ? "2.5847" : "0.00"}</span>
+              <span>Balance: {isConnected ? "2.5847" : "0.00"}</span>
             </div>
             <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors">
               <div className="flex-1">
@@ -139,7 +126,7 @@ export function SwapModal() {
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm text-gray-600">
               <span>To</span>
-              <span>Balance: {authenticated ? "1.2341" : "0.00"}</span>
+              <span>Balance: {isConnected ? "1.2341" : "0.00"}</span>
             </div>
             <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors">
               <div className="flex-1">
@@ -157,9 +144,9 @@ export function SwapModal() {
 
           {/* Swap Action Button */}
           <div className="pt-4">
-            {!authenticated ? (
+            {!isConnected ? (
               <Button
-                onClick={login}
+                onClick={() => open()}
                 className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium py-6 text-lg"
               >
                 Connect Wallet to Swap
@@ -179,7 +166,7 @@ export function SwapModal() {
           </div>
 
           {/* Swap Details */}
-          {fromAmount && toAmount && authenticated && (
+          {fromAmount && toAmount && isConnected && (
             <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
               <div className="text-sm text-green-800 space-y-1">
                 <div className="flex justify-between">
@@ -208,7 +195,7 @@ export function SwapModal() {
           <div className="text-center text-xs text-gray-500 mt-4 pt-4 border-t border-gray-200">
             Frontend Demo Only • No Actual Swapping
             <br />
-            Powered by Privy • Sepolia Testnet
+            Powered by Reown AppKit • Sepolia Testnet
           </div>
         </CardContent>
       </Card>

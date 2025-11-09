@@ -1,6 +1,6 @@
 "use client"
 
-// Mock wallet service that simulates Privy functionality
+// Mock wallet service (for demo purposes)
 export interface WalletUser {
   id: string
   email?: string

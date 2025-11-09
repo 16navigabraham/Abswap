@@ -112,10 +112,10 @@ export function SwapInterface() {
       UniswapRouter: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
     })
 
-    console.log("⚙️ Privy Configuration:", {
-      appId: process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cmcmgf2gb0084l50mm6zmhck2",
+    console.log("⚙️ Reown AppKit Configuration:", {
+      projectId: process.env.NEXT_PUBLIC_REOWN_PROJECT_ID || "Not configured",
       environment: "development",
-      embeddedWallets: true,
+      network: "Sepolia Testnet",
     })
 
     // Simulate transaction processing
@@ -278,9 +278,7 @@ export function SwapInterface() {
           {/* Footer */}
           {isAuthenticated && (
             <div className="text-center text-xs text-gray-500 mt-4 pt-4 border-t border-gray-200">
-              Powered by Privy • Sepolia Testnet
-              <br />
-              App ID: {process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cmcmgf2gb0084l50mm6zmhck2"}
+              Powered by Reown AppKit • Sepolia Testnet
             </div>
           )}
         </CardContent>

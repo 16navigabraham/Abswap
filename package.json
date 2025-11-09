@@ -11,7 +11,6 @@
   "dependencies": {
     "@abstract-foundation/agw-client": "latest",
     "@hookform/resolvers": "^3.9.1",
-    "@privy-io/react-auth": "^2.17.3",
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-alert-dialog": "latest",
     "@radix-ui/react-aspect-ratio": "latest",
@@ -76,6 +75,6 @@
     "@types/react-dom": "^19.1.6",
     "postcss": "^8.5",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   }
 }
