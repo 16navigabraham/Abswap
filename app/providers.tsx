@@ -1,25 +1,17 @@
 "use client"
 
 import type React from "react"
-import { PrivyProvider } from "@privy-io/react-auth"
+import { wagmiAdapter, projectId } from "@/lib/wagmi-config"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { WagmiProvider, type Config } from "wagmi"
+
+// Set up queryClient
+const queryClient = new QueryClient()
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <PrivyProvider
-      appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cmcmgf2gb0084l50mm6zmhck2"}
-      config={{
-        appearance: {
-          theme: "light",
-          accentColor: "#ff007a",
-          logo: "https://uniswap.org/favicon.ico",
-        },
-        loginMethods: ["wallet"],
-        embeddedWallets: {
-          createOnLogin: "off",
-        },
-      }}
-    >
-      {children}
-    </PrivyProvider>
+    <WagmiProvider config={wagmiAdapter.wagmiConfig as Config}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </WagmiProvider>
   )
 }

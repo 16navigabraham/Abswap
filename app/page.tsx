@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { ArrowUpDown, Settings } from "lucide-react"
-import { usePrivy } from "@privy-io/react-auth"
+import { useAppKit } from "@reown/appkit/react"
+import { useAccount, useDisconnect } from "wagmi"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,7 +11,9 @@ import { TokenSelector } from "@/components/token-selector"
 import { TOKENS, type Token } from "@/lib/tokens"
 
 export default function SwapPage() {
-  const { ready, authenticated, user, login, logout } = usePrivy()
+  const { open } = useAppKit()
+  const { address, isConnected } = useAccount()
+  const { disconnect } = useDisconnect()
 
   const [fromToken, setFromToken] = useState<Token>(TOKENS[0])
   const [toToken, setToToken] = useState<Token>(TOKENS[1])
@@ -38,33 +41,6 @@ export default function SwapPage() {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`
   }
 
-  const getUserWalletAddress = () => {
-    if (!user) return null
-    
-    // Check if user has a wallet property with address
-    if (user.wallet?.address) {
-      return user.wallet.address
-    }
-    
-    // Check linked accounts for wallet type
-    const walletAccount = user.linkedAccounts?.find((account: any) => account.type === "wallet")
-    if (walletAccount && 'address' in walletAccount) {
-      return walletAccount.address
-    }
-    
-    return null
-  }
-
-  const userWalletAddress = getUserWalletAddress()
-
-  if (!ready) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50 flex items-center justify-center">
-        <div className="text-gray-600 text-xl">Loading...</div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md bg-white shadow-xl border border-gray-200 rounded-2xl">
@@ -76,21 +52,10 @@ export default function SwapPage() {
             </Button>
           </div>
 
-          {/* {!authenticated && (
-            <div className="mt-4">
-              <Button
-                onClick={login}
-                className="w-full bg-pink-500 hover:bg-pink-600 text-white font-medium rounded-xl py-3"
-              >
-                Connect Wallet
-              </Button>
-            </div>
-          )} */}
-
-          {authenticated && userWalletAddress && (
+          {isConnected && address && (
             <div className="mt-4 flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-              <span className="text-sm text-gray-600">{formatAddress(userWalletAddress)}</span>
-              <Button onClick={logout} variant="ghost" size="sm" className="text-gray-500 hover:text-gray-700 text-xs">
+              <span className="text-sm text-gray-600">{formatAddress(address)}</span>
+              <Button onClick={() => disconnect()} variant="ghost" size="sm" className="text-gray-500 hover:text-gray-700 text-xs">
                 Disconnect
               </Button>
             </div>
@@ -152,9 +117,9 @@ export default function SwapPage() {
 
           {/* Swap Button */}
           <div className="pt-4">
-            {!authenticated ? (
+            {!isConnected ? (
               <Button
-                onClick={login}
+                onClick={() => open()}
                 className="w-full bg-pink-500 hover:bg-pink-600 text-white font-semibold py-4 text-lg rounded-2xl"
               >
                 Connect Wallet
@@ -171,7 +136,7 @@ export default function SwapPage() {
           </div>
 
           {/* Transaction Details */}
-          {fromAmount && toAmount && authenticated && (
+          {fromAmount && toAmount && isConnected && (
             <div className="mt-4 p-3 bg-gray-50 rounded-xl">
               <div className="text-sm text-gray-600 space-y-1">
                 <div className="flex justify-between">
