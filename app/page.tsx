@@ -216,18 +216,56 @@ export default function SwapPage() {
       }
 
       // Build quoter calldata for quoting amountOut
+      // Check whether a V3 pool exists for this token pair and fee before calling the quoter
+      try {
+        const poolAddr = await publicClient.readContract({
+          address: UNISWAP_CONTRACTS.V3.FACTORY as Address,
+          abi: [
+            {
+              inputs: [
+                { internalType: 'address', name: 'tokenA', type: 'address' },
+                { internalType: 'address', name: 'tokenB', type: 'address' },
+                { internalType: 'uint24', name: 'fee', type: 'uint24' },
+              ],
+              name: 'getPool',
+              outputs: [{ internalType: 'address', name: 'pool', type: 'address' }],
+              stateMutability: 'view',
+              type: 'function',
+            },
+          ],
+          functionName: 'getPool',
+          args: [tokenInAddress as Address, tokenOut as Address, fee],
+        })
+
+        const pool = String(poolAddr)
+        if (!pool || pool === '0x0000000000000000000000000000000000000000') {
+          toast({ title: 'No pool found', description: `No Uniswap V3 pool found for ${fromToken.symbol}/${toToken.symbol} at the selected fee. Try a different fee or token pair.`, open: true })
+          setIsSwapping(false)
+          return
+        }
+      } catch (e) {
+        // If factory check fails, continue to quoter but surface a friendly message on failure
+      }
+
       const quoterCalldata = encodeFunctionData({
         abi: UNISWAP_V3_QUOTER_ABI,
         functionName: "quoteExactInputSingle",
         args: [tokenInAddress as `0x${string}`, tokenOut, fee, amountIn, BigInt(0)],
       })
 
-      const quoteRes = await publicClient.call({
-        to: quoterAddress as Address,
-        data: quoterCalldata as `0x${string}`,
-      })
-
-      const quotedOut = BigInt(quoteRes as any)
+      let quotedOut: bigint
+      try {
+        const quoteRes = await publicClient.call({
+          to: quoterAddress as Address,
+          data: quoterCalldata as `0x${string}`,
+        })
+        quotedOut = BigInt(quoteRes as any)
+      } catch (e: any) {
+        console.error('Quoter call failed', e)
+        toast({ title: 'Quote failed', description: 'Failed to get a quote from Uniswap Quoter. This likely means no pool exists for the selected pair/fee, or the pool is uninitialized.', open: true })
+        setIsSwapping(false)
+        return
+      }
       const slippageBps = BigInt(Math.round(slippagePct * 100))
       const amountOutMinimum = (quotedOut * (BigInt(10000) - slippageBps)) / BigInt(10000)
 
