@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { ArrowUpDown, Settings, Loader2 } from "lucide-react"
 import { useAppKit } from "@reown/appkit/react"
 import { useAccount, useDisconnect } from "wagmi"
-import { parseEther, encodeFunctionData, parseUnits } from "viem"
+import { parseEther, encodeFunctionData, parseUnits, formatUnits } from "viem"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -44,6 +44,8 @@ export default function SwapPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [preparedQuote, setPreparedQuote] = useState<bigint | null>(null)
   const [preparedGas, setPreparedGas] = useState<bigint | null>(null)
+  const [preparedGasCostWei, setPreparedGasCostWei] = useState<bigint | null>(null)
+  const [preparedGasUsd, setPreparedGasUsd] = useState<number | null>(null)
   const [slippagePct, setSlippagePct] = useState<number>(0.5)
   const [selectedFee, setSelectedFee] = useState<number>(V3_FEE_TIERS.MEDIUM)
 
@@ -103,12 +105,21 @@ export default function SwapPage() {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`
   }
 
+  const formatBigint = (value: bigint | null, decimals = 18, precision = 6) => {
+    if (value === null) return "—"
+    try {
+      return Number(parseFloat(formatUnits(value, decimals))).toFixed(precision).replace(/\.0+$/, "")
+    } catch (e) {
+      return String(value)
+    }
+  }
+
   // Prepare swap: quote and gas estimate, then open confirm modal
   const prepareSwap = async () => {
     if (!isConnected || !address) return
 
     if (!fromAmount || Number(fromAmount) <= 0) {
-      alert("Enter a valid amount to swap")
+      toast({ title: "Invalid amount", description: "Enter a valid amount to swap", open: true })
       return
     }
 
@@ -117,7 +128,7 @@ export default function SwapPage() {
     try {
       const ethProvider = (window as any).ethereum
       if (!ethProvider || typeof ethProvider.request !== "function") {
-        alert("No injected wallet found (MetaMask, Coinbase Wallet). Please install or connect one.")
+        toast({ title: "No wallet", description: "No injected wallet found (MetaMask, Coinbase Wallet). Please install or connect one.", open: true })
         return
       }
 
@@ -135,7 +146,7 @@ export default function SwapPage() {
       const quoterAddress = UNISWAP_CONTRACTS.V3.QUOTER
 
       if (!quoterAddress) {
-        alert("Quoter contract not configured for this network")
+        toast({ title: "Network misconfigured", description: "Quoter contract not configured for this network", open: true })
         setIsSwapping(false)
         return
       }
@@ -143,7 +154,7 @@ export default function SwapPage() {
       const router = getUniswapV3Router()
 
       if (!publicClient || !walletClient?.data) {
-        alert("Wallet or provider client not available. Make sure your wallet is connected.")
+        toast({ title: "Client missing", description: "Wallet or provider client not available. Make sure your wallet is connected.", open: true })
         setIsSwapping(false)
         return
       }
@@ -197,7 +208,7 @@ export default function SwapPage() {
           }
 
           if (!approved) {
-            alert("Approval not confirmed in time. Please check wallet and try again.")
+            toast({ title: "Approval timeout", description: "Approval not confirmed in time. Please check wallet and try again.", open: true })
             setIsSwapping(false)
             return
           }
@@ -241,6 +252,8 @@ export default function SwapPage() {
 
       // estimate gas using publicClient.estimateGas if available
       let gasEstimate: bigint | null = null
+      let gasCostWei: bigint | null = null
+      let gasUsd: number | null = null
       if (publicClient) {
         try {
           const estimated = await publicClient.estimateGas({
@@ -249,21 +262,47 @@ export default function SwapPage() {
             value: isNative ? amountIn : BigInt(0),
           })
           gasEstimate = BigInt(estimated as any)
+
+          try {
+            const gasPrice = await publicClient.getGasPrice()
+            const gp = BigInt(gasPrice as any)
+            gasCostWei = gasEstimate * gp
+            setPreparedGasCostWei(gasCostWei)
+
+            // Try to fetch ETH price in USD (CoinGecko) — graceful fallback on failure
+            try {
+              const res = await fetch(
+                "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
+              )
+              if (res.ok) {
+                const json = await res.json()
+                const ethUsd = json?.ethereum?.usd
+                if (typeof ethUsd === "number") {
+                  gasUsd = Number(formatUnits(gasCostWei, 18)) * ethUsd
+                  setPreparedGasUsd(gasUsd)
+                }
+              }
+            } catch (e) {
+              // ignore price fetch errors
+            }
+          } catch (e) {
+            // ignore gas price failures
+          }
         } catch (e) {
           // ignore gas estimate failures
           gasEstimate = null
         }
       }
 
-      setPreparedQuote(quotedOut)
-      setPreparedGas(gasEstimate)
+  setPreparedQuote(quotedOut)
+  setPreparedGas(gasEstimate)
       setShowConfirmModal(true)
 
       setIsSwapping(false)
       return
     } catch (error) {
       console.error("❌ Swap failed:", error)
-      alert("Swap failed. Please check your wallet and try again.")
+      toast({ title: "Prepare failed", description: "Swap preparation failed. Check console for details.", open: true })
     } finally {
       setIsSwapping(false)
     }
@@ -343,7 +382,7 @@ export default function SwapPage() {
       toast({ title: "Swap submitted", description: String(swapTx), open: true })
     } catch (e) {
       console.error(e)
-      alert("Swap failed during execution")
+      toast({ title: "Swap failed", description: "Swap failed during execution. Check console for details.", open: true })
     } finally {
       setIsSwapping(false)
     }
@@ -544,17 +583,22 @@ export default function SwapPage() {
                   </div>
                   <div>
                     <div className="text-xs text-gray-500">Estimated Out</div>
-                    <div className="font-medium">{preparedQuote ? String(preparedQuote) : "..."} {toToken.symbol}</div>
+                    <div className="font-medium">{preparedQuote ? formatBigint(preparedQuote, toToken.decimals, 6) : "..."} {toToken.symbol}</div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500">Gas Estimate</div>
-                    <div className="font-medium">{preparedGas ? String(preparedGas) : "—"}</div>
+                    <div className="font-medium">
+                      {preparedGas ? `${formatBigint(preparedGas, 0, 0)} gas` : "—"}
+                      {preparedGasCostWei ? (
+                        <span className="ml-2 text-sm text-gray-500">(~{formatBigint(preparedGasCostWei, 18, 6)} ETH{preparedGasUsd ? ` / $${preparedGasUsd.toFixed(4)}` : ""})</span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 pt-2">
                     <label className="text-xs text-gray-500">Slippage</label>
-                    <Input type="number" value={slippagePct} onChange={(e) => setSlippagePct(Number(e.target.value))} className="w-24" />
+                    <Input disabled={isSwapping} type="number" value={slippagePct} onChange={(e) => setSlippagePct(Number(e.target.value))} className="w-24" />
                     <label className="text-xs text-gray-500">Fee</label>
-                    <select aria-label="Fee tier" value={selectedFee} onChange={(e) => setSelectedFee(Number(e.target.value))} className="ml-2">
+                    <select disabled={isSwapping} aria-label="Fee tier" value={selectedFee} onChange={(e) => setSelectedFee(Number(e.target.value))} className="ml-2">
                       <option value={V3_FEE_TIERS.LOW}>0.05%</option>
                       <option value={V3_FEE_TIERS.MEDIUM}>0.3%</option>
                       <option value={V3_FEE_TIERS.HIGH}>1%</option>
@@ -563,8 +607,17 @@ export default function SwapPage() {
                 </div>
 
                 <div className="mt-6 flex justify-end gap-3">
-                  <Button variant="ghost" onClick={() => setShowConfirmModal(false)}>Cancel</Button>
-                  <Button onClick={handleSwap} className="bg-pink-500 text-white">Confirm & Send</Button>
+                  <Button variant="ghost" onClick={() => setShowConfirmModal(false)} disabled={isSwapping}>Cancel</Button>
+                  <Button onClick={handleSwap} className="bg-pink-500 text-white" disabled={isSwapping}>
+                    {isSwapping ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      "Confirm & Send"
+                    )}
+                  </Button>
                 </div>
               </div>
             </div>
