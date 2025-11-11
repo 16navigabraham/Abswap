@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { ArrowUpDown, Settings, Loader2 } from "lucide-react"
 import { useAppKit } from "@reown/appkit/react"
 import { useAccount, useDisconnect } from "wagmi"
-import { parseEther } from "viem"
+import { parseEther, encodeFunctionData } from "viem"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,15 @@ import { TokenSelector } from "@/components/token-selector"
 import { TOKENS, type Token } from "@/lib/tokens"
 import { useAlchemyBalance } from "@/hooks/use-alchemy-balance"
 import { useToast } from "@/hooks/use-toast"
+import {
+  UNISWAP_V3_QUOTER_ABI,
+  UNISWAP_V3_ROUTER_ABI,
+  UNISWAP_CONTRACTS,
+  getUniswapV3Router,
+  getWETHAddress,
+  V3_FEE_TIERS,
+  buildTxUrl,
+} from "@/lib/uniswap-contracts"
 
 export default function SwapPage() {
   const { open } = useAppKit()
@@ -25,6 +34,39 @@ export default function SwapPage() {
   const [fromAmount, setFromAmount] = useState("")
   const [toAmount, setToAmount] = useState("")
   const [isSwapping, setIsSwapping] = useState(false)
+  const [txHash, setTxHash] = useState<string | null>(null)
+  const [confirmations, setConfirmations] = useState<number>(0)
+
+  // Poll for transaction confirmations
+  useEffect(() => {
+    if (!txHash) return
+    const interval = setInterval(async () => {
+      try {
+        const ethProvider = (window as any).ethereum
+        if (!ethProvider || typeof ethProvider.request !== "function") return
+        const receipt = await ethProvider.request({
+          method: "eth_getTransactionReceipt",
+          params: [txHash],
+        })
+        if (receipt && receipt.blockNumber) {
+          // get current block
+          const block = await ethProvider.request({ method: "eth_blockNumber" })
+          const blockNum = BigInt(block)
+          const txBlock = BigInt(receipt.blockNumber)
+          const confs = Number(blockNum - txBlock) + 1
+          setConfirmations(confs)
+          if (confs >= 1) {
+            // stop after 1 confirmation for demo
+            clearInterval(interval)
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [txHash])
 
   useEffect(() => {
     if (fromAmount && !isNaN(Number(fromAmount))) {
@@ -58,38 +100,117 @@ export default function SwapPage() {
 
     setIsSwapping(true)
 
-  try {
+    try {
       const ethProvider = (window as any).ethereum
       if (!ethProvider || typeof ethProvider.request !== "function") {
         alert("No injected wallet found (MetaMask, Coinbase Wallet). Please install or connect one.")
         return
       }
 
-      // Convert amount (ETH) to hex wei
-      const wei = parseEther(fromAmount) // returns bigint
-      const valueHex = `0x${wei.toString(16)}`
+      // Only support ETH -> token swaps for this demo
+      const nativeInput = fromToken.address === "0x0000000000000000000000000000000000000000"
+      if (!nativeInput) {
+        alert("Currently only ETH → token swaps are supported in this demo (use ETH as From token).")
+        setIsSwapping(false)
+        return
+      }
 
-      const params = [{
-        from: address,
-        to: address, // sending to self on testnet to trigger signature safely
-        value: valueHex,
-      }]
+      // amountIn as bigint (wei)
+      const amountIn = parseEther(fromAmount)
 
-      const result = await ethProvider.request({ method: "eth_sendTransaction", params })
+      // Setup quoter info
+      const fee = V3_FEE_TIERS.MEDIUM // 3000 = 0.3%
+      const weth = getWETHAddress()
+      const tokenOut = toToken.address
+      const quoterAddress = UNISWAP_CONTRACTS.V3.QUOTER
 
-      // result is the transaction hash
-      console.log("✅ Transaction submitted: ", result)
-      // show toast with link to Base Sepolia explorer
-      const explorerUrl = `https://sepolia.basescan.org/tx/${result}`
-      toast({
+      if (!quoterAddress) {
+        alert("Quoter contract not configured for this network")
+        setIsSwapping(false)
+        return
+      }
+
+      // Build quoter calldata
+      const quoterCalldata = encodeFunctionData({
+        abi: UNISWAP_V3_QUOTER_ABI,
+        functionName: "quoteExactInputSingle",
+        args: [weth as `0x${string}`, tokenOut as `0x${string}`, fee, amountIn, BigInt(0)],
+      })
+
+      // Call quoter via eth_call
+      const quoteRes: string = await ethProvider.request({
+        method: "eth_call",
+        params: [
+          {
+            to: quoterAddress,
+            data: quoterCalldata,
+          },
+          "latest",
+        ],
+      })
+
+      // quoteRes is hex-encoded uint256
+      const quotedOut = BigInt(quoteRes)
+      // apply slippage (0.5%)
+  const slippageBps = BigInt(50)
+  const amountOutMinimum = (quotedOut * (BigInt(10000) - slippageBps)) / BigInt(10000)
+
+      // Build exactInputSingle calldata
+      const router = getUniswapV3Router()
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 10) // 10 minutes
+
+      const exactInputParams = {
+        tokenIn: weth as `0x${string}`,
+        tokenOut: tokenOut as `0x${string}`,
+        fee: fee,
+        recipient: address as `0x${string}`,
+        deadline,
+        amountIn,
+        amountOutMinimum,
+        sqrtPriceLimitX96: BigInt(0),
+      }
+
+      const routerCalldata = encodeFunctionData({
+        abi: UNISWAP_V3_ROUTER_ABI,
+        functionName: "exactInputSingle",
+        args: [exactInputParams],
+      })
+
+      const txParams = [
+        {
+          from: address,
+          to: router,
+          data: routerCalldata,
+          value: `0x${amountIn.toString(16)}`,
+        },
+      ]
+
+      const txHashRes: string = await ethProvider.request({ method: "eth_sendTransaction", params: txParams })
+      console.log("✅ Transaction submitted: ", txHashRes)
+
+      setTxHash(txHashRes)
+      setConfirmations(0)
+
+      const explorerUrl = buildTxUrl(txHashRes)
+      const id = toast({
         title: "Transaction submitted",
         description: (
-          <a href={explorerUrl} target="_blank" rel="noreferrer" className="underline">
-            View on Base Sepolia Explorer
-          </a>
+          <div>
+            <a href={explorerUrl} target="_blank" rel="noreferrer" className="underline mr-2">
+              View on Explorer
+            </a>
+            <button
+              onClick={() => navigator.clipboard.writeText(txHashRes)}
+              className="ml-2 underline"
+            >
+              Copy TX
+            </button>
+          </div>
         ),
         open: true,
       })
+
+      // Start polling for confirmations (handled by effect below)
 
       // Reset amounts
       setFromAmount("")
@@ -249,6 +370,23 @@ export default function SwapPage() {
               </Button>
             )}
           </div>
+
+          {/* Inline Transaction Status Panel */}
+          {txHash && (
+            <div className="mt-4 p-3 bg-gray-50 rounded-xl border">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-xs text-gray-500">Transaction</span>
+                  <a href={buildTxUrl(txHash)} target="_blank" rel="noreferrer" className="text-sm font-medium underline">
+                    {txHash}
+                  </a>
+                </div>
+                <div className="text-sm text-gray-600">
+                  {confirmations > 0 ? `${confirmations} confirmation${confirmations > 1 ? 's' : ''}` : 'Pending'}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Transaction Details */}
           {fromAmount && toAmount && isConnected && (
