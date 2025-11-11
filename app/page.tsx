@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { ArrowUpDown, Settings, Loader2 } from "lucide-react"
 import { useAppKit } from "@reown/appkit/react"
 import { useAccount, useDisconnect } from "wagmi"
-import { parseEther, encodeFunctionData } from "viem"
+import { parseEther, encodeFunctionData, parseUnits } from "viem"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,8 @@ import { TokenSelector } from "@/components/token-selector"
 import { TOKENS, type Token } from "@/lib/tokens"
 import { useAlchemyBalance } from "@/hooks/use-alchemy-balance"
 import { useToast } from "@/hooks/use-toast"
+import { usePublicClient, useWalletClient } from "wagmi"
+import type { Address } from "viem"
 import {
   UNISWAP_V3_QUOTER_ABI,
   UNISWAP_V3_ROUTER_ABI,
@@ -20,6 +22,7 @@ import {
   getWETHAddress,
   V3_FEE_TIERS,
   buildTxUrl,
+  ERC20_ABI,
 } from "@/lib/uniswap-contracts"
 
 export default function SwapPage() {
@@ -28,6 +31,8 @@ export default function SwapPage() {
   const { disconnect } = useDisconnect()
   const { ethBalanceFormatted, isLoadingETH } = useAlchemyBalance()
   const { toast } = useToast()
+  const publicClient = usePublicClient()
+  const walletClient = useWalletClient()
 
   const [fromToken, setFromToken] = useState<Token>(TOKENS[0])
   const [toToken, setToToken] = useState<Token>(TOKENS[1])
@@ -36,29 +41,38 @@ export default function SwapPage() {
   const [isSwapping, setIsSwapping] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [confirmations, setConfirmations] = useState<number>(0)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [preparedQuote, setPreparedQuote] = useState<bigint | null>(null)
+  const [preparedGas, setPreparedGas] = useState<bigint | null>(null)
+  const [slippagePct, setSlippagePct] = useState<number>(0.5)
+  const [selectedFee, setSelectedFee] = useState<number>(V3_FEE_TIERS.MEDIUM)
 
-  // Poll for transaction confirmations
+  // Poll for transaction confirmations (prefer publicClient if available)
   useEffect(() => {
     if (!txHash) return
     const interval = setInterval(async () => {
       try {
+        if (publicClient) {
+          const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` })
+          if (receipt && receipt.blockNumber) {
+            const latestBlock = await publicClient.getBlockNumber()
+            const confs = Number(BigInt(latestBlock) - BigInt(receipt.blockNumber) + BigInt(1))
+            setConfirmations(confs)
+            if (confs >= 1) clearInterval(interval)
+            return
+          }
+        }
+
         const ethProvider = (window as any).ethereum
         if (!ethProvider || typeof ethProvider.request !== "function") return
-        const receipt = await ethProvider.request({
-          method: "eth_getTransactionReceipt",
-          params: [txHash],
-        })
+        const receipt = await ethProvider.request({ method: "eth_getTransactionReceipt", params: [txHash] })
         if (receipt && receipt.blockNumber) {
-          // get current block
           const block = await ethProvider.request({ method: "eth_blockNumber" })
           const blockNum = BigInt(block)
           const txBlock = BigInt(receipt.blockNumber)
           const confs = Number(blockNum - txBlock) + 1
           setConfirmations(confs)
-          if (confs >= 1) {
-            // stop after 1 confirmation for demo
-            clearInterval(interval)
-          }
+          if (confs >= 1) clearInterval(interval)
         }
       } catch (e) {
         // ignore
@@ -66,7 +80,7 @@ export default function SwapPage() {
     }, 3000)
 
     return () => clearInterval(interval)
-  }, [txHash])
+  }, [txHash, publicClient])
 
   useEffect(() => {
     if (fromAmount && !isNaN(Number(fromAmount))) {
@@ -89,8 +103,8 @@ export default function SwapPage() {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`
   }
 
-  // Use the provider directly to send an eth_sendTransaction request which will prompt the user's wallet to sign.
-  const handleSwap = async () => {
+  // Prepare swap: quote and gas estimate, then open confirm modal
+  const prepareSwap = async () => {
     if (!isConnected || !address) return
 
     if (!fromAmount || Number(fromAmount) <= 0) {
@@ -107,21 +121,17 @@ export default function SwapPage() {
         return
       }
 
-      // Only support ETH -> token swaps for this demo
-      const nativeInput = fromToken.address === "0x0000000000000000000000000000000000000000"
-      if (!nativeInput) {
-        alert("Currently only ETH → token swaps are supported in this demo (use ETH as From token).")
-        setIsSwapping(false)
-        return
-      }
-
-      // amountIn as bigint (wei)
-      const amountIn = parseEther(fromAmount)
+      // amountIn as bigint according to token decimals
+      const isNative = fromToken.address === "0x0000000000000000000000000000000000000000"
+      const amountIn = isNative
+        ? parseEther(fromAmount)
+        : parseUnits(fromAmount, fromToken.decimals)
 
       // Setup quoter info
-      const fee = V3_FEE_TIERS.MEDIUM // 3000 = 0.3%
+  const fee = selectedFee
       const weth = getWETHAddress()
-      const tokenOut = toToken.address
+      const tokenInAddress = isNative ? weth : (fromToken.address as `0x${string}`)
+      const tokenOut = toToken.address as `0x${string}`
       const quoterAddress = UNISWAP_CONTRACTS.V3.QUOTER
 
       if (!quoterAddress) {
@@ -130,38 +140,91 @@ export default function SwapPage() {
         return
       }
 
-      // Build quoter calldata
+      const router = getUniswapV3Router()
+
+      if (!publicClient || !walletClient?.data) {
+        alert("Wallet or provider client not available. Make sure your wallet is connected.")
+        setIsSwapping(false)
+        return
+      }
+
+      const wallet = walletClient.data
+
+      // If tokenIn is ERC20, ensure allowance to router using publicClient
+      if (!isNative) {
+        const allowanceCall = await publicClient.readContract({
+          address: fromToken.address as Address,
+          abi: ERC20_ABI as any,
+          functionName: "allowance",
+          args: [address as Address, router as Address],
+        })
+        const allowance = BigInt(allowanceCall as any)
+        if (allowance < amountIn) {
+          // send approve via walletClient
+          const approveTxHash = await wallet.writeContract({
+            address: fromToken.address as Address,
+            abi: ERC20_ABI as any,
+            functionName: "approve",
+            args: [router as Address, amountIn],
+          })
+
+          toast({
+            title: "Approval submitted",
+            description: (
+              <div>
+                <a href={buildTxUrl(String(approveTxHash))} target="_blank" rel="noreferrer" className="underline mr-2">
+                  View approval
+                </a>
+                <button onClick={() => navigator.clipboard.writeText(String(approveTxHash))} className="ml-2 underline">
+                  Copy TX
+                </button>
+              </div>
+            ),
+            open: true,
+          })
+
+          // wait for approval confirmation using publicClient
+          let approved = false
+          for (let i = 0; i < 40; i++) {
+            // eslint-disable-next-line no-await-in-loop
+            const receipt = await publicClient.getTransactionReceipt({ hash: approveTxHash as `0x${string}` })
+            if (receipt && receipt.blockNumber) {
+              approved = true
+              break
+            }
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise((r) => setTimeout(r, 3000))
+          }
+
+          if (!approved) {
+            alert("Approval not confirmed in time. Please check wallet and try again.")
+            setIsSwapping(false)
+            return
+          }
+        }
+      }
+
+      // Build quoter calldata for quoting amountOut
       const quoterCalldata = encodeFunctionData({
         abi: UNISWAP_V3_QUOTER_ABI,
         functionName: "quoteExactInputSingle",
-        args: [weth as `0x${string}`, tokenOut as `0x${string}`, fee, amountIn, BigInt(0)],
+        args: [tokenInAddress as `0x${string}`, tokenOut, fee, amountIn, BigInt(0)],
       })
 
-      // Call quoter via eth_call
-      const quoteRes: string = await ethProvider.request({
-        method: "eth_call",
-        params: [
-          {
-            to: quoterAddress,
-            data: quoterCalldata,
-          },
-          "latest",
-        ],
+      const quoteRes = await publicClient.call({
+        to: quoterAddress as Address,
+        data: quoterCalldata as `0x${string}`,
       })
 
-      // quoteRes is hex-encoded uint256
-      const quotedOut = BigInt(quoteRes)
-      // apply slippage (0.5%)
-  const slippageBps = BigInt(50)
-  const amountOutMinimum = (quotedOut * (BigInt(10000) - slippageBps)) / BigInt(10000)
+      const quotedOut = BigInt(quoteRes as any)
+      const slippageBps = BigInt(Math.round(slippagePct * 100))
+      const amountOutMinimum = (quotedOut * (BigInt(10000) - slippageBps)) / BigInt(10000)
 
-      // Build exactInputSingle calldata
-      const router = getUniswapV3Router()
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 10) // 10 minutes
-
+      // Build exactInputSingle params (needed for calldata before gas estimate)
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 10)
       const exactInputParams = {
-        tokenIn: weth as `0x${string}`,
-        tokenOut: tokenOut as `0x${string}`,
+        tokenIn: tokenInAddress as `0x${string}`,
+        tokenOut,
         fee: fee,
         recipient: address as `0x${string}`,
         deadline,
@@ -176,48 +239,111 @@ export default function SwapPage() {
         args: [exactInputParams],
       })
 
-      const txParams = [
-        {
-          from: address,
-          to: router,
-          data: routerCalldata,
-          value: `0x${amountIn.toString(16)}`,
-        },
-      ]
+      // estimate gas using publicClient.estimateGas if available
+      let gasEstimate: bigint | null = null
+      if (publicClient) {
+        try {
+          const estimated = await publicClient.estimateGas({
+            to: router as Address,
+            data: routerCalldata as `0x${string}`,
+            value: isNative ? amountIn : BigInt(0),
+          })
+          gasEstimate = BigInt(estimated as any)
+        } catch (e) {
+          // ignore gas estimate failures
+          gasEstimate = null
+        }
+      }
 
-      const txHashRes: string = await ethProvider.request({ method: "eth_sendTransaction", params: txParams })
-      console.log("✅ Transaction submitted: ", txHashRes)
+      setPreparedQuote(quotedOut)
+      setPreparedGas(gasEstimate)
+      setShowConfirmModal(true)
 
-      setTxHash(txHashRes)
-      setConfirmations(0)
-
-      const explorerUrl = buildTxUrl(txHashRes)
-      const id = toast({
-        title: "Transaction submitted",
-        description: (
-          <div>
-            <a href={explorerUrl} target="_blank" rel="noreferrer" className="underline mr-2">
-              View on Explorer
-            </a>
-            <button
-              onClick={() => navigator.clipboard.writeText(txHashRes)}
-              className="ml-2 underline"
-            >
-              Copy TX
-            </button>
-          </div>
-        ),
-        open: true,
-      })
-
-      // Start polling for confirmations (handled by effect below)
-
-      // Reset amounts
-      setFromAmount("")
-      setToAmount("")
+      setIsSwapping(false)
+      return
     } catch (error) {
       console.error("❌ Swap failed:", error)
       alert("Swap failed. Please check your wallet and try again.")
+    } finally {
+      setIsSwapping(false)
+    }
+  }
+
+  // Execute swap after user confirms in modal
+  const handleSwap = async () => {
+    setShowConfirmModal(false)
+    // reuse existing logic: perform approval and swap using walletClient
+    // call prepareSwap internals by invoking same code path but with confirmation
+    // For brevity, call prepareSwap then send the swap (we'll trigger wallet flow by calling writeContract)
+    setIsSwapping(true)
+    try {
+      // Now actually perform swap: build exactInputParams and call wallet.writeContract
+      // The prepareSwap stored necessary values (preparedQuote/preparedGas) in state for the modal; here we re-run minimal steps to execute the swap.
+      const isNative = fromToken.address === "0x0000000000000000000000000000000000000000"
+      const amountIn = isNative ? parseEther(fromAmount) : parseUnits(fromAmount, fromToken.decimals)
+      const fee = selectedFee
+      const weth = getWETHAddress()
+      const tokenInAddress = isNative ? weth : (fromToken.address as `0x${string}`)
+      const tokenOut = toToken.address as `0x${string}`
+      const router = getUniswapV3Router()
+      const publicClientLocal = publicClient
+      if (!publicClientLocal || !walletClient?.data) throw new Error("Clients not available")
+      const wallet = walletClient.data
+
+      // handle approval if needed
+      if (!isNative) {
+        const allowanceCall = await publicClientLocal.readContract({
+          address: fromToken.address as Address,
+          abi: ERC20_ABI as any,
+          functionName: "allowance",
+          args: [address as Address, router as Address],
+        })
+        const allowance = BigInt(allowanceCall as any)
+        if (allowance < amountIn) {
+          await wallet.writeContract({
+            address: fromToken.address as Address,
+            abi: ERC20_ABI as any,
+            functionName: "approve",
+            args: [router as Address, amountIn],
+          })
+        }
+      }
+
+      const quoterCalldata = encodeFunctionData({
+        abi: UNISWAP_V3_QUOTER_ABI,
+        functionName: "quoteExactInputSingle",
+        args: [tokenInAddress as `0x${string}`, tokenOut, fee, amountIn, BigInt(0)],
+      })
+      const quoteRes = await publicClientLocal.call({ to: UNISWAP_CONTRACTS.V3.QUOTER as Address, data: quoterCalldata as `0x${string}` })
+      const quotedOut = BigInt(quoteRes as any)
+      const slippageBps = BigInt(Math.round(slippagePct * 100))
+      const amountOutMinimum = (quotedOut * (BigInt(10000) - slippageBps)) / BigInt(10000)
+
+      const exactInputParams = {
+        tokenIn: tokenInAddress as `0x${string}`,
+        tokenOut,
+        fee: fee,
+        recipient: address as `0x${string}`,
+        deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 10),
+        amountIn,
+        amountOutMinimum,
+        sqrtPriceLimitX96: BigInt(0),
+      }
+
+      const swapTx = await wallet.writeContract({
+        address: router as Address,
+        abi: UNISWAP_V3_ROUTER_ABI as any,
+        functionName: "exactInputSingle",
+        args: [exactInputParams as any],
+        value: isNative ? amountIn : BigInt(0),
+      })
+
+      setTxHash(String(swapTx))
+      setConfirmations(0)
+      toast({ title: "Swap submitted", description: String(swapTx), open: true })
+    } catch (e) {
+      console.error(e)
+      alert("Swap failed during execution")
     } finally {
       setIsSwapping(false)
     }
@@ -355,7 +481,7 @@ export default function SwapPage() {
               </Button>
             ) : (
               <Button 
-                onClick={handleSwap}
+                onClick={prepareSwap}
                 disabled={isSwapping}
                 className="w-full bg-pink-500 hover:bg-pink-600 text-white font-semibold py-4 text-lg rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -401,6 +527,44 @@ export default function SwapPage() {
                 <div className="flex justify-between">
                   <span>Network cost</span>
                   <span>$1.50</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Confirm Modal */}
+          {showConfirmModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+              <div className="w-full max-w-lg bg-white rounded-2xl p-6 shadow-lg">
+                <h3 className="text-lg font-semibold mb-2">Confirm Swap</h3>
+                <div className="text-sm text-gray-700 space-y-3">
+                  <div>
+                    <div className="text-xs text-gray-500">Amount In</div>
+                    <div className="font-medium">{fromAmount} {fromToken.symbol}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Estimated Out</div>
+                    <div className="font-medium">{preparedQuote ? String(preparedQuote) : "..."} {toToken.symbol}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Gas Estimate</div>
+                    <div className="font-medium">{preparedGas ? String(preparedGas) : "—"}</div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-2">
+                    <label className="text-xs text-gray-500">Slippage</label>
+                    <Input type="number" value={slippagePct} onChange={(e) => setSlippagePct(Number(e.target.value))} className="w-24" />
+                    <label className="text-xs text-gray-500">Fee</label>
+                    <select aria-label="Fee tier" value={selectedFee} onChange={(e) => setSelectedFee(Number(e.target.value))} className="ml-2">
+                      <option value={V3_FEE_TIERS.LOW}>0.05%</option>
+                      <option value={V3_FEE_TIERS.MEDIUM}>0.3%</option>
+                      <option value={V3_FEE_TIERS.HIGH}>1%</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end gap-3">
+                  <Button variant="ghost" onClick={() => setShowConfirmModal(false)}>Cancel</Button>
+                  <Button onClick={handleSwap} className="bg-pink-500 text-white">Confirm & Send</Button>
                 </div>
               </div>
             </div>
