@@ -4,18 +4,21 @@ import { useState, useEffect } from "react"
 import { ArrowUpDown, Settings, Loader2 } from "lucide-react"
 import { useAppKit } from "@reown/appkit/react"
 import { useAccount, useDisconnect } from "wagmi"
+import { parseEther } from "viem"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { TokenSelector } from "@/components/token-selector"
 import { TOKENS, type Token } from "@/lib/tokens"
 import { useAlchemyBalance } from "@/hooks/use-alchemy-balance"
+import { useToast } from "@/hooks/use-toast"
 
 export default function SwapPage() {
   const { open } = useAppKit()
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
   const { ethBalanceFormatted, isLoadingETH } = useAlchemyBalance()
+  const { toast } = useToast()
 
   const [fromToken, setFromToken] = useState<Token>(TOKENS[0])
   const [toToken, setToToken] = useState<Token>(TOKENS[1])
@@ -44,38 +47,56 @@ export default function SwapPage() {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`
   }
 
+  // Use the provider directly to send an eth_sendTransaction request which will prompt the user's wallet to sign.
   const handleSwap = async () => {
     if (!isConnected || !address) return
-    
+
+    if (!fromAmount || Number(fromAmount) <= 0) {
+      alert("Enter a valid amount to swap")
+      return
+    }
+
     setIsSwapping(true)
-    
-    try {
-      console.log("🔄 SWAP INITIATED")
-      console.log("=".repeat(50))
-      console.log("📊 Swap Details:", {
-        from: `${fromAmount} ${fromToken.symbol}`,
-        to: `${toAmount} ${toToken.symbol}`,
-        fromAddress: fromToken.address,
-        toAddress: toToken.address,
+
+  try {
+      const ethProvider = (window as any).ethereum
+      if (!ethProvider || typeof ethProvider.request !== "function") {
+        alert("No injected wallet found (MetaMask, Coinbase Wallet). Please install or connect one.")
+        return
+      }
+
+      // Convert amount (ETH) to hex wei
+      const wei = parseEther(fromAmount) // returns bigint
+      const valueHex = `0x${wei.toString(16)}`
+
+      const params = [{
+        from: address,
+        to: address, // sending to self on testnet to trigger signature safely
+        value: valueHex,
+      }]
+
+      const result = await ethProvider.request({ method: "eth_sendTransaction", params })
+
+      // result is the transaction hash
+      console.log("✅ Transaction submitted: ", result)
+      // show toast with link to Base Sepolia explorer
+      const explorerUrl = `https://sepolia.basescan.org/tx/${result}`
+      toast({
+        title: "Transaction submitted",
+        description: (
+          <a href={explorerUrl} target="_blank" rel="noreferrer" className="underline">
+            View on Base Sepolia Explorer
+          </a>
+        ),
+        open: true,
       })
-      console.log("👤 User:", address)
-      console.log("🌐 Network: Base Sepolia (Chain ID: 84532)")
-      console.log("💰 Balance:", ethBalanceFormatted || "Loading...")
-      
-      // Simulate swap transaction
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      console.log("✅ Swap completed successfully!")
-      alert(
-        `🎉 Swap Successful!\n\n${fromAmount} ${fromToken.symbol} → ${toAmount} ${toToken.symbol}\n\nTransaction submitted to Base Sepolia testnet`
-      )
-      
+
       // Reset amounts
       setFromAmount("")
       setToAmount("")
     } catch (error) {
       console.error("❌ Swap failed:", error)
-      alert("Swap failed. Please try again.")
+      alert("Swap failed. Please check your wallet and try again.")
     } finally {
       setIsSwapping(false)
     }
