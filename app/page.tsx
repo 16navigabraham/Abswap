@@ -18,12 +18,24 @@ import {
   UNISWAP_V3_QUOTER_ABI,
   UNISWAP_V3_ROUTER_ABI,
   UNISWAP_CONTRACTS,
+  // @ts-ignore - we'll add WETH ABI locally
+  // WETH address available at UNISWAP_CONTRACTS.TOKENS.WETH
   getUniswapV3Router,
   getWETHAddress,
   V3_FEE_TIERS,
   buildTxUrl,
   ERC20_ABI,
 } from "@/lib/uniswap-contracts"
+
+const WETH_ABI = [
+  {
+    name: "deposit",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [],
+    outputs: [],
+  },
+]
 
 export default function SwapPage() {
   const { open } = useAppKit()
@@ -216,6 +228,30 @@ export default function SwapPage() {
       }
 
       // Build quoter calldata for quoting amountOut
+      // Special-case: ETH -> WETH (wrap)
+      const wethAddress = getWETHAddress()
+      const isWrappingETHtoWETH = isNative && tokenOut.toLowerCase() === wethAddress.toLowerCase()
+      if (isWrappingETHtoWETH) {
+        // Estimate gas for simple WETH deposit
+        let gasEstimateWrap: bigint | null = null
+        try {
+          const estimated = await publicClient.estimateGas({
+            to: wethAddress as Address,
+            data: "0x", // deposit uses empty calldata, value is amountIn
+            value: amountIn,
+          })
+          gasEstimateWrap = BigInt(estimated as any)
+        } catch (e) {
+          gasEstimateWrap = null
+        }
+
+        setPreparedQuote(amountIn)
+        setPreparedGas(gasEstimateWrap)
+        setShowConfirmModal(true)
+        setIsSwapping(false)
+        return
+      }
+
       // Check whether a V3 pool exists for this token pair and fee before calling the quoter
       try {
         const poolAddr = await publicClient.readContract({
@@ -366,6 +402,29 @@ export default function SwapPage() {
       const publicClientLocal = publicClient
       if (!publicClientLocal || !walletClient?.data) throw new Error("Clients not available")
       const wallet = walletClient.data
+
+      // If this is ETH -> WETH wrap, call WETH.deposit payable
+      const isWrappingETHtoWETH = isNative && tokenOut.toLowerCase() === weth.toLowerCase()
+      if (isWrappingETHtoWETH) {
+        try {
+          const tx = await wallet.writeContract({
+            address: weth as Address,
+            abi: WETH_ABI as any,
+            functionName: "deposit",
+            args: [],
+            value: amountIn,
+          })
+
+          setTxHash(String(tx))
+          setConfirmations(0)
+          toast({ title: "Wrap submitted", description: String(tx), open: true })
+          return
+        } catch (e) {
+          console.error(e)
+          toast({ title: "Wrap failed", description: "WETH deposit failed. Check console for details.", open: true })
+          return
+        }
+      }
 
       // handle approval if needed
       if (!isNative) {
