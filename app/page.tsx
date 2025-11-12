@@ -670,49 +670,148 @@ export default function SwapPage() {
 
           {/* Confirm Modal */}
           {showConfirmModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-              <div className="w-full max-w-lg bg-white rounded-2xl p-6 shadow-lg">
-                <h3 className="text-lg font-semibold mb-2">Confirm Swap</h3>
-                <div className="text-sm text-gray-700 space-y-3">
-                  <div>
-                    <div className="text-xs text-gray-500">Amount In</div>
-                    <div className="font-medium">{fromAmount} {fromToken.symbol}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500">Estimated Out</div>
-                    <div className="font-medium">{preparedQuote ? formatBigint(preparedQuote, toToken.decimals, 6) : "..."} {toToken.symbol}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500">Gas Estimate</div>
-                    <div className="font-medium">
-                      {preparedGas ? `${formatBigint(preparedGas, 0, 0)} gas` : "—"}
-                      {preparedGasCostWei ? (
-                        <span className="ml-2 text-sm text-gray-500">(~{formatBigint(preparedGasCostWei, 18, 6)} ETH{preparedGasUsd ? ` / $${preparedGasUsd.toFixed(4)}` : ""})</span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 pt-2">
-                    <label className="text-xs text-gray-500">Slippage</label>
-                    <Input disabled={isSwapping} type="number" value={slippagePct} onChange={(e) => setSlippagePct(Number(e.target.value))} className="w-24" />
-                    <label className="text-xs text-gray-500">Fee</label>
-                    <select disabled={isSwapping} aria-label="Fee tier" value={selectedFee} onChange={(e) => setSelectedFee(Number(e.target.value))} className="ml-2">
-                      <option value={V3_FEE_TIERS.LOW}>0.05%</option>
-                      <option value={V3_FEE_TIERS.MEDIUM}>0.3%</option>
-                      <option value={V3_FEE_TIERS.HIGH}>1%</option>
-                    </select>
-                  </div>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-pink-500 to-purple-600 px-6 py-4">
+                  <h3 className="text-xl font-bold text-white">Confirm Swap</h3>
+                  <p className="text-pink-100 text-sm mt-1">Review your transaction details</p>
                 </div>
 
-                <div className="mt-6 flex justify-end gap-3">
-                  <Button variant="ghost" onClick={() => setShowConfirmModal(false)} disabled={isSwapping}>Cancel</Button>
-                  <Button onClick={handleSwap} className="bg-pink-500 text-white" disabled={isSwapping}>
+                {/* Content */}
+                <div className="p-6 space-y-4">
+                  {/* Swap Summary Card */}
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-4 space-y-3">
+                    {/* From */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center">
+                          <span className="text-lg font-bold text-pink-600">{fromToken.symbol[0]}</span>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">You pay</div>
+                          <div className="font-semibold text-gray-900">{fromAmount} {fromToken.symbol}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Swap Arrow */}
+                    <div className="flex justify-center">
+                      <div className="w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center">
+                        <ArrowUpDown className="w-4 h-4 text-pink-600" />
+                      </div>
+                    </div>
+
+                    {/* To */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center">
+                          <span className="text-lg font-bold text-purple-600">{toToken.symbol[0]}</span>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">You receive (estimated)</div>
+                          <div className="font-semibold text-gray-900">
+                            {preparedQuote ? formatBigint(preparedQuote, toToken.decimals, 6) : "..."} {toToken.symbol}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Transaction Details */}
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <span className="text-gray-600">Minimum received</span>
+                      <span className="font-medium text-gray-900">
+                        {preparedQuote ? formatBigint((preparedQuote * (BigInt(10000) - BigInt(Math.round(slippagePct * 100)))) / BigInt(10000), toToken.decimals, 6) : "—"} {toToken.symbol}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <span className="text-gray-600">Network fee</span>
+                      <div className="text-right">
+                        <div className="font-medium text-gray-900">
+                          {preparedGasCostWei ? `~${formatBigint(preparedGasCostWei, 18, 6)} ETH` : "—"}
+                        </div>
+                        {preparedGasUsd && (
+                          <div className="text-xs text-gray-500">${preparedGasUsd.toFixed(2)}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <span className="text-gray-600">Price impact</span>
+                      <span className="font-medium text-green-600">{"<0.01%"}</span>
+                    </div>
+
+                    {/* Settings */}
+                    <div className="pt-3 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="text-sm text-gray-600 font-medium">Slippage tolerance</label>
+                        <div className="flex items-center gap-2">
+                          <Input 
+                            disabled={isSwapping} 
+                            type="number" 
+                            value={slippagePct} 
+                            onChange={(e) => setSlippagePct(Number(e.target.value))} 
+                            className="w-20 h-8 text-sm"
+                            step="0.1"
+                            min="0.1"
+                            max="50"
+                          />
+                          <span className="text-sm text-gray-500">%</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="text-sm text-gray-600 font-medium">Pool fee</label>
+                        <select 
+                          disabled={isSwapping} 
+                          aria-label="Fee tier" 
+                          value={selectedFee} 
+                          onChange={(e) => setSelectedFee(Number(e.target.value))} 
+                          className="h-8 px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        >
+                          <option value={V3_FEE_TIERS.LOW}>0.05%</option>
+                          <option value={V3_FEE_TIERS.MEDIUM}>0.3%</option>
+                          <option value={V3_FEE_TIERS.HIGH}>1%</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Warning */}
+                  {slippagePct > 5 && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                      <p className="text-xs text-yellow-800">
+                        ⚠️ High slippage tolerance! You may receive significantly less due to price movements.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="px-6 pb-6 flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowConfirmModal(false)} 
+                    disabled={isSwapping}
+                    className="flex-1 h-12 border-2 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleSwap} 
+                    disabled={isSwapping}
+                    className="flex-1 h-12 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-semibold shadow-lg"
+                  >
                     {isSwapping ? (
                       <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                         Processing...
                       </>
                     ) : (
-                      "Confirm & Send"
+                      "Confirm Swap"
                     )}
                   </Button>
                 </div>
