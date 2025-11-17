@@ -73,7 +73,7 @@ export function SwapModal() {
                   className="border-green-300 text-green-600 hover:bg-green-50"
                 >
                   <Wallet className="w-3 h-3 mr-1" />
-                  Connect
+                  Connect wallet
                 </Button>
               )}
               
@@ -199,7 +199,7 @@ export function SwapModal() {
                 </div>
                 <div className="flex justify-between">
                   <span>Network fee:</span>
-                  <span>~$2.50</span>
+                  <span>~$1.50</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Network:</span>
