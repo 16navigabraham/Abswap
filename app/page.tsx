@@ -376,7 +376,7 @@ export default function SwapPage() {
       return
     } catch (error) {
       console.error("❌ Swap failed:", error)
-      toast({ title: "Prepare failed", description: "Swap preparation failed. Check console for details.", open: true })
+      toast({ title: "Prepare failed", description: "Swap preparation failed. Check browser console for details.", open: true })
     } finally {
       setIsSwapping(false)
     }
@@ -421,7 +421,7 @@ export default function SwapPage() {
           return
         } catch (e) {
           console.error(e)
-          toast({ title: "Wrap failed", description: "WETH deposit failed. Check console for details.", open: true })
+          toast({ title: "Wrap failed", description: "WETH deposit failed. Check browser console for details.", open: true })
           return
         }
       }
