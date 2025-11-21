@@ -376,7 +376,7 @@ export default function SwapPage() {
       return
     } catch (error) {
       console.error("❌ Swap failed:", error)
-      toast({ title: "Prepare failed", description: "Swap preparation failed. Check browser console for details.", open: true })
+      toast({ title: "Error", description: "Failed to prepare swap", open: true })
     } finally {
       setIsSwapping(false)
     }
