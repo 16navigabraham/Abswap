@@ -58,14 +58,7 @@ export const TOKENS: Token[] = [
 //     logoURI: "/placeholder.svg?height=32&width=32",
 //     isPopular: true,
 //   },
-//   {
-//     symbol: "LINK",
-//     name: "Chainlink",
-//     address: "0x779877A7B0D9E8603169DdbD7836e478b4624789",
-//     decimals: 18,
-//     logoURI: "/placeholder.svg?height=32&width=32",
-//     isPopular: true,
-//   },
+//   
 //   {
 //     symbol: "UNI",
 //     name: "Uniswap",
