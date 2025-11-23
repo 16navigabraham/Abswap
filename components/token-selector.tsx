@@ -116,7 +116,7 @@ export function TokenSelector({ selectedToken, onTokenSelect, otherToken }: Toke
         {filteredTokens.length === 0 && (
           <div className="text-center py-8 text-gray-500">
             <p>No tokens found</p>
-            <p className="text-sm mt-1">Try a different search term</p>
+            <p className="text-sm mt-1">Try searching by token name, symbol, or contract address</p>
           </div>
         )}
       </DialogContent>

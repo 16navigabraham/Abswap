@@ -88,13 +88,7 @@ export const TOKENS: Token[] = [
 //     decimals: 18,
 //     logoURI: "/placeholder.svg?height=32&width=32",
 //   },
-//   {
-//     symbol: "SNX",
-//     name: "Synthetix",
-//     address: "0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F",
-//     decimals: 18,
-//     logoURI: "/placeholder.svg?height=32&width=32",
-//   },
+//  
 // ]
 
 export const SEPOLIA_TOKENS: Token[] = [
